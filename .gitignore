@@ -1,0 +1,13 @@
+target/
+Cargo.lock
+.DS_Store
+.lineage/
+data/
+*.log
+.env
+.env.*
+!.env.example
+.idea/
+.vscode/
+.claude/
+CLAUDE.md

@@ -1,0 +1,82 @@
+# lineage iii-engine config (builtins only)
+#
+# v0 dev path: this file lists ONLY engine-builtin workers. The lineage
+# workers (lineage-strategy, lineage-gitops, hook-*) are run manually via
+# scripts/dev.sh and connect to the engine over WebSocket on
+# `ws://127.0.0.1:49234`. iii-hq/workers deps (session-tree, hook-fanout,
+# dlp-scrubber, audit-log, context-compaction, provider-router) are
+# pulled in at runtime via `iii worker add <name>` once the registry
+# resolves them.
+
+workers:
+  - name: iii-worker-manager
+    config:
+      port: ${WORKER_PORT:49234}
+      host: 127.0.0.1
+
+  - name: iii-http
+    config:
+      port: ${HTTP_PORT:3211}
+      host: 127.0.0.1
+      default_timeout: 30000
+      concurrency_request_limit: 1024
+      cors:
+        allowed_origins:
+          - 'http://localhost:3213'
+        allowed_methods: [GET, POST, PUT, DELETE, OPTIONS]
+
+  - name: iii-stream
+    config:
+      port: ${STREAM_PORT:3212}
+      host: 127.0.0.1
+      adapter:
+        name: kv
+        config:
+          store_method: file_based
+          file_path: ./data/stream_store
+
+  - name: iii-state
+    config:
+      adapter:
+        name: kv
+        config:
+          store_method: file_based
+          file_path: ./data/state_store.db
+          save_interval_ms: 5000
+
+  - name: iii-queue
+    config:
+      queue_configs:
+        lineage_checkpoint:
+          max_retries: 5
+          concurrency: 1
+          type: fifo
+          message_group_field: session_id
+          backoff_ms: 250
+      adapter:
+        name: builtin
+        config:
+          store_method: file_based
+          file_path: ./data/queue_store
+
+  - name: iii-pubsub
+    config:
+      adapter:
+        name: local
+
+  - name: iii-cron
+    config:
+      adapter:
+        name: kv
+        config:
+          lock_ttl_ms: 30000
+          lock_index: lineage_cron_locks
+
+  - name: iii-observability
+    config:
+      enabled: true
+      service_name: lineage
+      exporter: memory
+      sampling_ratio: 1.0
+      metrics_enabled: true
+      logs_enabled: true

@@ -1,0 +1,4 @@
+name: hook-runtime-events
+version: 0.1.0
+description: Generic runtime hook normaliser. Translates the common payload shape (event/session_id/prompt/tool fields) used by Codex, Gemini CLI, OpenCode, Cursor, GitHub Copilot CLI, Factory.ai Droid into NormalisedEvent.
+binary: hook-runtime-events

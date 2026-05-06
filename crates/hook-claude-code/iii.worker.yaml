@@ -1,0 +1,4 @@
+name: hook-claude-code
+version: 0.1.0
+description: Normaliser for Claude Code runtime hook payloads. Translates `session-start`, `user-prompt-submit`, `stop`, `pre-task`, `post-task`, `todo` events into a `NormalisedEvent`.
+binary: hook-claude-code

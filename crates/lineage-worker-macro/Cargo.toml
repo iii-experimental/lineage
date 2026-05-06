@@ -1,0 +1,22 @@
+[package]
+name = "lineage-worker-macro"
+description = "Declarative macro for lineage worker boot. Expands inline so iii-sdk calls stay textually visible in each worker's main.rs (per cargo expand). Pure plumbing — no abstraction layer over iii_sdk semantics."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[lib]
+name = "lineage_worker_macro"
+path = "src/lib.rs"
+
+[dependencies]
+# Re-exports so callers don't have to add these manually.
+iii-sdk.workspace = true
+tokio.workspace = true
+clap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true

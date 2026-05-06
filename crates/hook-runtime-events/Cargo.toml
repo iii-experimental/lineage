@@ -1,0 +1,30 @@
+[package]
+name = "hook-runtime-events"
+description = "Generic hook normaliser. Translates the common runtime hook payload shape (event/session_id/prompt/tool fields) into NormalisedEvent. Covers Codex, Gemini CLI, OpenCode, Cursor, GitHub Copilot CLI, Factory.ai Droid, and any future runtime that adopts the same shape."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "hook-runtime-events"
+path = "src/main.rs"
+
+[lib]
+name = "hook_runtime_events"
+path = "src/lib.rs"
+
+[dependencies]
+iii-sdk.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+schemars.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap.workspace = true
+lineage-worker-macro = { path = "../lineage-worker-macro" }

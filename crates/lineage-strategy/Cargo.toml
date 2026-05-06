@@ -1,0 +1,33 @@
+[package]
+name = "lineage-strategy"
+description = "Event-timing brain for lineage. Owns the six HTTP hook triggers and orchestrates normaliser → session-tree → gitops."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "lineage-strategy"
+path = "src/main.rs"
+
+[lib]
+name = "lineage_strategy"
+path = "src/lib.rs"
+
+[dependencies]
+iii-sdk.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+schemars.workspace = true
+thiserror.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap.workspace = true
+uuid.workspace = true
+parking_lot.workspace = true
+lineage-gitops = { path = "../lineage-gitops" }
+lineage-worker-macro = { path = "../lineage-worker-macro" }

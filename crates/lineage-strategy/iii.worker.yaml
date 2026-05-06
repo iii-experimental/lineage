@@ -1,0 +1,7 @@
+name: lineage-strategy
+version: 0.1.0
+description: Event-timing brain — owns six HTTP hook triggers and orchestrates per-agent normaliser → session-tree → gitops.
+binary: lineage-strategy
+deps:
+  hook-fanout: "^0.1"
+  session-tree: "^0.1"

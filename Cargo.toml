@@ -1,0 +1,45 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/lineage-strategy",
+    "crates/lineage-gitops",
+    "crates/lineage-cli",
+    "crates/lineage-worker-macro",
+    "crates/hook-claude-code",
+    "crates/hook-runtime-events",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "Apache-2.0"
+repository = "https://github.com/iii-hq/iii-experimental-lineage"
+authors = ["iii contributors"]
+
+[workspace.dependencies]
+iii-sdk = "0.11.6"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time", "net", "signal", "process", "io-util", "fs"] }
+tempfile = "3"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "0.8"
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+clap = { version = "4", features = ["derive", "env"] }
+gix = { version = "0.66", default-features = false, features = ["max-performance-safe", "blocking-network-client"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+base64 = "0.22"
+walkdir = "2"
+ignore = "0.4"
+parking_lot = "0.12"
+async-trait = "0.1"
+futures-util = "0.3"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

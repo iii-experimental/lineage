@@ -1,0 +1,4 @@
+name: lineage-gitops
+version: 0.1.0
+description: gix wrapper. Shadow-ref snapshot, rewind, commit-trailer attachment.
+binary: lineage-gitops
