@@ -44,5 +44,5 @@ First public 0.x release. Greenfield. Targets `iii-engine` 0.11.6+. Local-only (
 - Snapshot latency dominated by gix tree walk + blob hashing of new/changed files; index reuse is a v0.2 optimisation.
 - `lineage-cli` per-call cost: ~1.7 s due to full `register_worker` connection setup. Lighter client lands in v0.2.
 
-[Unreleased]: https://github.com/iii-hq/iii-experimental-lineage/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/iii-hq/iii-experimental-lineage/releases/tag/v0.1.0
+[Unreleased]: https://github.com/iii-experimental/lineage/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/iii-experimental/lineage/releases/tag/v0.1.0

@@ -14,7 +14,7 @@ version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "Apache-2.0"
-repository = "https://github.com/iii-hq/iii-experimental-lineage"
+repository = "https://github.com/iii-experimental/lineage"
 authors = ["iii contributors"]
 
 [workspace.dependencies]

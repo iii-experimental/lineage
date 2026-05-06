@@ -28,7 +28,7 @@ You've shipped code with Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Copil
 
 **0.1.0**, greenfield. Targets `iii-engine` 0.11.6+. Local-only for v0; team aggregation via `iii-bridge` (already supported by the engine, no extra code).
 
-What works today: HTTP hook ingest, payload-shape-routed normalisers (Claude Code + a generic shape covering Codex / Gemini CLI / OpenCode / Cursor / Copilot CLI / Droid / any future runtime that emits `{event, session_id, ...}`), pure-`gix` shadow-ref snapshot capturing untracked files, rewind, list, blob resolve, commit-trailer attachment, CLI shim, `lineage_checkpoint` FIFO queue serialising concurrent snapshots per session, hook-fanout-based `detect` routing, `dev.sh`-supervised worker auto-restart. 32 unit tests; end-to-end smoke verified live; 17 ms p50 per hook.
+What works today: HTTP hook ingest, payload-shape-routed normalisers (Claude Code + a generic shape covering Codex / Gemini CLI / OpenCode / Cursor / Copilot CLI / Droid / any future runtime that emits `{event, session_id, ...}`), pure-`gix` shadow-ref snapshot capturing untracked files, rewind, list, blob resolve, commit-trailer attachment, CLI shim, `lineage_checkpoint` FIFO queue serialising concurrent snapshots per session, hook-fanout-based `detect` routing, `dev.sh`-supervised worker auto-restart. 32 unit tests; end-to-end smoke verified live; 12 ms mean / 13 ms p50 per hook.
 
 What's planned (see [TODOS](#todos)): `lineage init` (one-shot project setup), `lineage doctor` (preflight check + auto-repair), a real GIF, `lineage recap` (LLM session summaries), `lineage search` (BM25 over checkpoints), prebuilt release binaries.
 
@@ -41,8 +41,8 @@ What's planned (see [TODOS](#todos)): `lineage init` (one-shot project setup), `
 curl -fsSL https://install.iii.dev/iii/main/install.sh | sh
 
 # 2. clone + build (~50s first run, cached after)
-git clone https://github.com/iii-hq/iii-experimental-lineage
-cd iii-experimental-lineage
+git clone https://github.com/iii-experimental/lineage
+cd lineage
 cargo build --release
 
 # 3. boot engine + 4 lineage workers (point at the project you want to capture)
@@ -296,7 +296,7 @@ Each ref is a real commit object pointing at a real tree, built natively via `gi
 ### Repo layout
 
 ```
-iii-experimental-lineage/
+lineage/
 ├── Cargo.toml                       # workspace, edition 2024, rust-version 1.85
 ├── crates/
 │   ├── lineage-strategy/            # the brain (HTTP triggers + dispatch)
@@ -340,7 +340,7 @@ Tracked in this repo for v0.2.0:
 
 Done since v0.0.1:
 
-- [x] Pure-`gix` shadow-snapshot path. No fork-execs. Captures untracked files. Honors `.gitignore`. 17 ms p50 (down from 91 ms).
+- [x] Pure-`gix` shadow-snapshot path. No fork-execs. Captures untracked files. Honors `.gitignore`. 13 ms p50 (down from 91 ms).
 - [x] Collapsed 7 sibling normaliser crates into 1 generic + 1 Claude-Code-specific (~1,200 LOC delete).
 - [x] FIFO queue serialising concurrent snapshots per session.
 - [x] hook-fanout-based payload-shape detection.
