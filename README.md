@@ -26,7 +26,7 @@ You've shipped code with Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Copil
 
 ## Status
 
-**0.2.0** shipped 2026-05-07. Targets `iii-engine` 0.11.6+. Local-only for v0; team aggregation via `iii-bridge` (already supported by the engine, no extra code).
+**0.2.1** shipped 2026-05-07 (console-URL fix). v0.2.0 shipped same day. Targets `iii-engine` 0.11.6+. Local-only for v0; team aggregation via `iii-bridge` (already supported by the engine, no extra code).
 
 What works today: HTTP hook ingest, payload-shape-routed normalisers (Claude Code + a generic shape covering Codex / Gemini CLI / OpenCode / Cursor / Copilot CLI / Droid / any future runtime that emits `{event, session_id, ...}`), pure-`gix` shadow-ref snapshot capturing untracked files, rewind, list, blob resolve, commit-trailer attachment, CLI shim with `init` / `doctor` / `status` / `hook` / `checkpoint`, multi-tenant `repo_path` lift from hook payload `cwd`, `lineage_checkpoint` FIFO queue serialising concurrent snapshots per session, hook-fanout-based `detect` routing, `dev.sh`-supervised worker auto-restart. 37 unit tests; end-to-end smoke verified live; 12 ms mean / 13 ms p50 per hook.
 
@@ -34,7 +34,7 @@ What's planned (see [TODOS](#todos)): a real GIF, `lineage recap` (LLM session s
 
 ## 60-second install
 
-> Requires Rust 1.85+, git, and free `:49234` / `:3211` / `:3212` / `:3213` on localhost.
+> Requires Rust 1.85+, git, and free `:49234` / `:3211` / `:3212` / `:3113` on localhost.
 
 ```bash
 # 1. iii engine (~10s)
@@ -59,16 +59,16 @@ You should see:
 
 ```json
 {
+  "console_hint": "open http://127.0.0.1:3113 for live worker / function / queue state",
   "current_session_id": null,
-  "enabled": false,
+  "enabled": true,
   "engine_url": "ws://127.0.0.1:49234",
   "http_base": "http://127.0.0.1:3211",
-  "repo_path": "/path/to/your/project",
-  "console_hint": "open http://127.0.0.1:3213 for live worker / function / queue state"
+  "repo_path": "/path/to/your/project"
 }
 ```
 
-If the JSON prints, lineage is healthy. Open **`http://127.0.0.1:3213`** in a browser — that's the live iii-console; you'll watch sessions, queues, traces, and shadow refs land in real time as you drive Claude Code.
+If the JSON prints, lineage is healthy. Open **`http://127.0.0.1:3113`** in a browser — that's the live iii-console; you'll watch sessions, queues, traces, and shadow refs land in real time as you drive Claude Code.
 
 > **iii-hq workers are optional.** Lineage runs standalone in v0.1+. Once `session-tree`, `hook-fanout`, `dlp-scrubber`, `audit-log`, `context-compaction`, and `provider-router` publish to the iii worker registry, `iii worker add <name>` plugs them in for free. Until then lineage degrades gracefully: `entry_id` stays empty, shadow refs still land.
 
@@ -208,7 +208,7 @@ iii trigger --port 49234 --function-id lineage::attach_trailers \
   --payload '{"repo_path":"/your/project","commit_oid":"<oid>","session_id":"<sid>","entry_path":["<entry-id>"]}'
 ```
 
-The live `iii-console` at `http://127.0.0.1:3213` renders the same data: registered functions, traces, queues, dead-letter, state slices, real-time stream activity. No custom UI in this repo — composes the stock console.
+The live `iii-console` at `http://127.0.0.1:3113` renders the same data: registered functions, traces, queues, dead-letter, state slices, real-time stream activity. No custom UI in this repo — composes the stock console.
 
 ## Troubleshooting
 
@@ -260,7 +260,7 @@ None of these are required for v0.1 — lineage publishes the right `agent::*` t
 | LLM cost caps | `llm-budget` | iii-hq/workers (planned) |
 | Provider auth | `auth-credentials`, `oauth-anthropic`, `oauth-openai-codex`, ... | iii-hq/workers (planned) |
 | MCP exposure | `mcp` | iii-hq/workers (planned) |
-| Live UI | stock `iii-console` (`:3213`) | iii-engine (works today) |
+| Live UI | stock `iii-console` (`:3113`) | iii-engine (works today) |
 | Team aggregation | `iii-bridge` | iii-engine (works today) |
 | Observability | `iii-observability` (OTel) | iii-engine (works today) |
 

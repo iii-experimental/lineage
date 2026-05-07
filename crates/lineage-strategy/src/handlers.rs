@@ -325,7 +325,7 @@ pub async fn handle_status(ctx: &StrategyContext) -> StatusOutput {
             .ok()
             .or_else(|| Some("ws://127.0.0.1:49234".to_string())),
         http_base: Some("http://127.0.0.1:3211".to_string()),
-        console_hint: "open http://127.0.0.1:3213 for live worker / function / queue state"
+        console_hint: "open http://127.0.0.1:3113 for live worker / function / queue state"
             .to_string(),
     }
 }

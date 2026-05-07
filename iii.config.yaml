@@ -22,7 +22,8 @@ workers:
       concurrency_request_limit: 1024
       cors:
         allowed_origins:
-          - 'http://localhost:3213'
+          - 'http://localhost:3113'
+          - 'http://127.0.0.1:3113'
         allowed_methods: [GET, POST, PUT, DELETE, OPTIONS]
 
   - name: iii-stream

@@ -4,6 +4,14 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-05-07
+
+### Fixed
+- **iii-console URL was pointing at nothing.** v0.2.0 advertised `http://127.0.0.1:3213` from the README, `lineage status`, `lineage init`, and `lineage doctor --smoke` error hints — but lineage's `iii.config.yaml` never spawned an `iii-console` worker, and 3213 wasn't even the canonical console port. Result: every dev who clicked the URL got "connection refused." Fix: `scripts/dev.sh` now launches `iii console --port 3113 --engine-port 3211 --ws-port 3212 --bridge-port 49234` after the engine boots, pointed at lineage's shifted engine ports. The console serves on its **canonical default :3113**; lineage doesn't invent a custom console port. All references updated. CORS allow-origins in `iii.config.yaml` now match.
+
+### Changed
+- Stale `enabled: false` example in README's status output replaced with `enabled: true` (matches actual default after v0.2.0's real enable/disable wiring).
+
 ## [0.2.0] - 2026-05-07
 
 ### Added
@@ -13,7 +21,7 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 - `lineage::enable` / `lineage::disable` actually flip a real flag now. `StrategyContext.enabled: AtomicBool` defaults to `true`. While disabled, `handle_hook` short-circuits and returns `{blocked: true, message: "lineage capture is disabled..."}` without writing a session-tree entry, enqueueing a snapshot, or publishing to `agent::*` topics. Runtimes stay responsive (HTTP 200), nothing lands. v0.2 limitation: in-memory only, resets to `enabled` on engine restart.
 - "Next:" hint after `lineage status` JSON, pointing at the iii-console URL, the end-to-end demo script, and `lineage init`. Closes the "is it working / what now?" gap immediately after install.
 - Pause / resume capture section in README documents the kill-switch semantics.
-- iii-console (`http://127.0.0.1:3213`) URL promoted in the install-flow section so first-time users discover live activity in the right minute.
+- iii-console (`http://127.0.0.1:3113`) URL promoted in the install-flow section so first-time users discover live activity in the right minute.
 
 ### Changed
 - `recap`, `search`, and `checkpoint explain` clap subcommands are now hidden from `--help`. They still resolve and print "planned in v0.2" stubs but don't pollute discovery while incomplete. They reappear in `--help` when the underlying workers ship.
@@ -73,6 +81,7 @@ First public 0.x release. Greenfield. Targets `iii-engine` 0.11.6+. Local-only (
 - Snapshot latency dominated by gix tree walk + blob hashing of new/changed files; index reuse is a v0.2 optimisation.
 - `lineage-cli` per-call cost: ~1.7 s due to full `register_worker` connection setup. Lighter client lands in v0.2.
 
-[Unreleased]: https://github.com/iii-experimental/lineage/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/iii-experimental/lineage/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/iii-experimental/lineage/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/iii-experimental/lineage/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/iii-experimental/lineage/releases/tag/v0.1.0

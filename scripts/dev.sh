@@ -3,9 +3,10 @@
 # available; otherwise emulate with parallel arrays below.
 # Boot iii-engine + lineage workers for local development.
 #
-# Architecture: engine on :3211 (HTTP), :3212 (stream), :3213 (console),
-# worker WS on :49234. Custom ports to avoid clashing with any other iii
-# engine you have running.
+# Architecture: engine on :3211 (HTTP), :3212 (stream), worker WS on :49234.
+# Engine ports shifted +100 from iii defaults to avoid clashing with any
+# other iii engine you have running. Console runs on its canonical default
+# :3113 (since :3113 is unused by our engine, no need to shift).
 #
 # Worker supervision:
 # Lineage workers run as separate processes that connect to the engine over
@@ -92,7 +93,6 @@ cargo build --release
 echo "==> starting iii-engine..."
 echo "    HTTP    :3211"
 echo "    stream  :3212"
-echo "    console :3213"
 echo "    worker  :49234"
 iii --no-update-check --config "$ROOT/iii.config.yaml" \
   >"$LOG_DIR/iii-engine.log" 2>&1 &
@@ -103,6 +103,16 @@ for _ in $(seq 1 30); do
   if nc -z 127.0.0.1 49234 2>/dev/null; then break; fi
   sleep 0.2
 done
+
+echo "==> starting iii-console (canonical :3113, pointed at lineage's engine)..."
+iii console \
+  --port 3113 \
+  --engine-port 3211 \
+  --ws-port 3212 \
+  --bridge-port 49234 \
+  >"$LOG_DIR/iii-console.log" 2>&1 &
+PIDS+=("$!")
+echo "    console http://127.0.0.1:3113"
 
 echo "==> starting lineage workers (LINEAGE_REPO_PATH=$LINEAGE_REPO_PATH)..."
 for w in "${WORKERS[@]}"; do

@@ -213,7 +213,7 @@ async fn main() -> anyhow::Result<()> {
             println!();
             println!("Next:");
             println!(
-                "  - Live activity:    open http://127.0.0.1:3213 (iii-console)"
+                "  - Live activity:    open http://127.0.0.1:3113 (iii-console)"
             );
             println!(
                 "  - Smoke the loop:   ./examples/end-to-end-demo.sh    # capture + rewind a real file in /tmp"
@@ -670,7 +670,7 @@ async fn check_smoke(http_base: &str) -> DoctorRow {
                 check: "Smoke: synthetic hook → ref",
                 status: DocStatus::Fail,
                 detail: format!(
-                    "no ref under {prefix} after 3s. Tail data/logs/lineage-gitops.log; check iii-queue depth at http://127.0.0.1:3213/queues."
+                    "no ref under {prefix} after 3s. Tail data/logs/lineage-gitops.log; check iii-queue depth at http://127.0.0.1:3113/queues."
                 ),
             };
         }
