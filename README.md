@@ -26,7 +26,7 @@ You've shipped code with Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Copil
 
 ## Status
 
-**0.1.0** shipped 2026-05-06. **0.2.0-dev** in progress. Targets `iii-engine` 0.11.6+. Local-only for v0; team aggregation via `iii-bridge` (already supported by the engine, no extra code).
+**0.2.0** shipped 2026-05-07. Targets `iii-engine` 0.11.6+. Local-only for v0; team aggregation via `iii-bridge` (already supported by the engine, no extra code).
 
 What works today: HTTP hook ingest, payload-shape-routed normalisers (Claude Code + a generic shape covering Codex / Gemini CLI / OpenCode / Cursor / Copilot CLI / Droid / any future runtime that emits `{event, session_id, ...}`), pure-`gix` shadow-ref snapshot capturing untracked files, rewind, list, blob resolve, commit-trailer attachment, CLI shim with `init` / `doctor` / `status` / `hook` / `checkpoint`, multi-tenant `repo_path` lift from hook payload `cwd`, `lineage_checkpoint` FIFO queue serialising concurrent snapshots per session, hook-fanout-based `detect` routing, `dev.sh`-supervised worker auto-restart. 37 unit tests; end-to-end smoke verified live; 12 ms mean / 13 ms p50 per hook.
 

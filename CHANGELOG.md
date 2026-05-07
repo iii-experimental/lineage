@@ -4,6 +4,8 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-05-07
+
 ### Added
 - `lineage doctor` — preflight that checks the seven things that actually break a fresh install: HTTP base reachable, WS engine TCP reachable, `--path` is a git repo, `.claude/settings.json` hook block present, `lineage::status` registered, both `hook::*::detect` functions registered. Prints an aligned `CHECK / STATUS / DETAILS` table with a `Summary: N PASS, N WARN, N FAIL` footer. WARN for "missing hook block" (recoverable via `lineage init`), FAIL only for "engine not running / function not registered". Verified against a clean engine: 7 PASS / 0 WARN / 0 FAIL on an initialized repo, 6 PASS / 1 WARN / 0 FAIL on a fresh `git init` with no settings.json.
 - `lineage doctor --smoke` — after preflight, fires a synthetic Claude Code `Stop` hook against a temp git repo (with `cwd` carrying the temp path so multi-tenant routing kicks in), polls up to 3s for a shadow ref under `refs/iii/lineage/checkpoints/v0/<smoke-session>/`. Catches the "hook returned 200 but no checkpoint landed" runtime symptom (queue stuck, gitops crashed, ignore patterns swallowing the world) that doctor's preflight cannot detect.
@@ -71,5 +73,6 @@ First public 0.x release. Greenfield. Targets `iii-engine` 0.11.6+. Local-only (
 - Snapshot latency dominated by gix tree walk + blob hashing of new/changed files; index reuse is a v0.2 optimisation.
 - `lineage-cli` per-call cost: ~1.7 s due to full `register_worker` connection setup. Lighter client lands in v0.2.
 
-[Unreleased]: https://github.com/iii-experimental/lineage/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/iii-experimental/lineage/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/iii-experimental/lineage/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/iii-experimental/lineage/releases/tag/v0.1.0
