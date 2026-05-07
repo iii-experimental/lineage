@@ -4,6 +4,13 @@ All notable changes are recorded here. Format: [Keep a Changelog](https://keepac
 
 ## [Unreleased]
 
+### Added
+- `lineage doctor` — preflight that checks the seven things that actually break a fresh install: HTTP base reachable, WS engine TCP reachable, `--path` is a git repo, `.claude/settings.json` hook block present, `lineage::status` registered, both `hook::*::detect` functions registered. Prints an aligned `CHECK / STATUS / DETAILS` table with a `Summary: N PASS, N WARN, N FAIL` footer. WARN for "missing hook block" (recoverable via `lineage init`), FAIL only for "engine not running / function not registered". Verified against a clean engine: 7 PASS / 0 WARN / 0 FAIL on an initialized repo, 6 PASS / 1 WARN / 0 FAIL on a fresh `git init` with no settings.json.
+- Multi-tenant `repo_path` from hook payload `cwd`. `NormalisedEvent` now carries `cwd: Option<String>`; both `hook-claude-code` and `hook-runtime-events` lift it from the runtime payload (`cwd` for Claude Code; `cwd` or `repo_path` for the generic shape). Strategy uses `evt.cwd.unwrap_or_else(|| ctx.repo_path())` so a single engine can capture sessions for multiple repos concurrently. Five new tests.
+
+### Changed
+- Default test count in README updated 32 → 37.
+
 ## [0.1.0] - 2026-05-06
 
 First public 0.x release. Greenfield. Targets `iii-engine` 0.11.6+. Local-only (team aggregation via `iii-bridge`; iii cloud one-click deploy when it ships).

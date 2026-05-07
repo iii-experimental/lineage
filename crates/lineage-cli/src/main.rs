@@ -55,6 +55,12 @@ enum Cmd {
         #[arg(long)]
         force: bool,
     },
+    /// Run preflight checks: engine reachable, ports, git repo, hook block, workers connected.
+    Doctor {
+        /// Project root to check. Defaults to current directory.
+        #[arg(long)]
+        path: Option<PathBuf>,
+    },
     /// Mark this project as enabled for capture.
     Enable,
     /// Disable capture for this project.
@@ -162,6 +168,9 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.cmd {
         Cmd::Init { path, force } => return cmd_init(path, force, &cli.http_base).await,
+        Cmd::Doctor { path } => {
+            return cmd_doctor(path, &cli.http_base, &cli.engine_url).await;
+        }
         Cmd::Hook { agent, event } => return cmd_hook(&cli.http_base, &agent, &event).await,
         Cmd::Agent { cmd } => return cmd_agent(cmd).await,
         Cmd::Checkpoint {
@@ -228,7 +237,10 @@ async fn main() -> anyhow::Result<()> {
             CheckpointCmd::Explain { .. } => unreachable!("handled above"),
         },
         // Already returned above:
-        Cmd::Init { .. } | Cmd::Hook { .. } | Cmd::Agent { .. } => unreachable!(),
+        Cmd::Init { .. }
+        | Cmd::Doctor { .. }
+        | Cmd::Hook { .. }
+        | Cmd::Agent { .. } => unreachable!(),
         Cmd::Search { .. } | Cmd::Recap { .. } => unreachable!(),
     }
 
@@ -397,4 +409,274 @@ async fn cmd_hook(http_base: &str, agent: &str, event: &str) -> anyhow::Result<(
         std::process::exit(status.as_u16() as i32 / 100);
     }
     Ok(())
+}
+
+// ---------- `lineage doctor` ----------
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DocStatus {
+    Pass,
+    Warn,
+    Fail,
+}
+
+impl DocStatus {
+    fn label(self) -> &'static str {
+        match self {
+            DocStatus::Pass => "PASS",
+            DocStatus::Warn => "WARN",
+            DocStatus::Fail => "FAIL",
+        }
+    }
+}
+
+struct DoctorRow {
+    check: &'static str,
+    status: DocStatus,
+    detail: String,
+}
+
+async fn cmd_doctor(
+    path: Option<PathBuf>,
+    http_base: &str,
+    engine_url: &str,
+) -> anyhow::Result<()> {
+    let root = path.unwrap_or(std::env::current_dir()?);
+    let mut rows: Vec<DoctorRow> = Vec::new();
+
+    // 1. HTTP base reachable.
+    rows.push(check_http(http_base).await);
+
+    // 2. WS engine reachable (TCP-connect to the parsed host:port).
+    rows.push(check_ws_tcp(engine_url).await);
+
+    // 3. Project is a git repo.
+    rows.push(check_git(&root));
+
+    // 4. .claude/settings.json exists + has lineage hooks.
+    rows.push(check_hook_block(&root, http_base));
+
+    // 5-7. Function registrations (only meaningful if WS is up).
+    let ws_up = matches!(rows[1].status, DocStatus::Pass);
+    if ws_up {
+        let iii = register_worker(engine_url, InitOptions::default());
+        for (label, fn_id, payload) in [
+            (
+                "lineage::status registered",
+                "lineage::status",
+                serde_json::json!({}),
+            ),
+            (
+                "hook::claude_code::detect registered",
+                "hook::claude_code::detect",
+                serde_json::json!({"raw": {}}),
+            ),
+            (
+                "hook::runtime_events::detect registered",
+                "hook::runtime_events::detect",
+                serde_json::json!({"raw": {}}),
+            ),
+        ] {
+            rows.push(check_function(&iii, label, fn_id, payload).await);
+        }
+        iii.shutdown_async().await;
+    } else {
+        rows.push(DoctorRow {
+            check: "lineage::status registered",
+            status: DocStatus::Fail,
+            detail: "skipped: engine not reachable".into(),
+        });
+        rows.push(DoctorRow {
+            check: "hook::claude_code::detect registered",
+            status: DocStatus::Fail,
+            detail: "skipped: engine not reachable".into(),
+        });
+        rows.push(DoctorRow {
+            check: "hook::runtime_events::detect registered",
+            status: DocStatus::Fail,
+            detail: "skipped: engine not reachable".into(),
+        });
+    }
+
+    print_doctor(&rows);
+
+    let fails = rows.iter().filter(|r| r.status == DocStatus::Fail).count();
+    if fails > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+async fn check_http(http_base: &str) -> DoctorRow {
+    let url = format!("{http_base}/");
+    let result = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_millis(500))
+        .build()
+        .and_then(|c| Ok(c.get(&url)));
+    match result {
+        Ok(req) => match req.send().await {
+            // Any HTTP response means the engine's iii-http is alive.
+            Ok(r) => DoctorRow {
+                check: "HTTP base reachable",
+                status: DocStatus::Pass,
+                detail: format!("{} → {}", http_base, r.status().as_u16()),
+            },
+            Err(e) => DoctorRow {
+                check: "HTTP base reachable",
+                status: DocStatus::Fail,
+                detail: format!("{http_base}: {e}. Run ./scripts/dev.sh."),
+            },
+        },
+        Err(e) => DoctorRow {
+            check: "HTTP base reachable",
+            status: DocStatus::Fail,
+            detail: format!("client build: {e}"),
+        },
+    }
+}
+
+async fn check_ws_tcp(engine_url: &str) -> DoctorRow {
+    // Parse `ws://host:port`. iii-sdk doesn't expose a ping, so a TCP connect
+    // is the cheapest way to know the engine is listening.
+    let addr = engine_url
+        .strip_prefix("ws://")
+        .or_else(|| engine_url.strip_prefix("wss://"))
+        .unwrap_or(engine_url);
+    let host_port = addr.split('/').next().unwrap_or(addr);
+    let connect = tokio::time::timeout(
+        std::time::Duration::from_millis(500),
+        tokio::net::TcpStream::connect(host_port),
+    )
+    .await;
+    match connect {
+        Ok(Ok(_)) => DoctorRow {
+            check: "WS engine reachable",
+            status: DocStatus::Pass,
+            detail: format!("{engine_url} TCP connect ok"),
+        },
+        Ok(Err(e)) => DoctorRow {
+            check: "WS engine reachable",
+            status: DocStatus::Fail,
+            detail: format!("{engine_url}: {e}. Run ./scripts/dev.sh."),
+        },
+        Err(_) => DoctorRow {
+            check: "WS engine reachable",
+            status: DocStatus::Fail,
+            detail: format!("{engine_url}: connect timed out"),
+        },
+    }
+}
+
+fn check_git(root: &std::path::Path) -> DoctorRow {
+    if root.join(".git").exists() {
+        DoctorRow {
+            check: "Project is a git repo",
+            status: DocStatus::Pass,
+            detail: root.display().to_string(),
+        }
+    } else {
+        DoctorRow {
+            check: "Project is a git repo",
+            status: DocStatus::Fail,
+            detail: format!("{} has no .git/. Run `git init`.", root.display()),
+        }
+    }
+}
+
+fn check_hook_block(root: &std::path::Path, http_base: &str) -> DoctorRow {
+    let settings = root.join(".claude").join("settings.json");
+    if !settings.exists() {
+        return DoctorRow {
+            check: "Claude Code hook block present",
+            status: DocStatus::Warn,
+            detail: format!(
+                "{} missing. Run `lineage init` to write it.",
+                settings.display()
+            ),
+        };
+    }
+    let body = match std::fs::read_to_string(&settings) {
+        Ok(s) => s,
+        Err(e) => {
+            return DoctorRow {
+                check: "Claude Code hook block present",
+                status: DocStatus::Fail,
+                detail: format!("read {}: {e}", settings.display()),
+            };
+        }
+    };
+    let lineage_route = format!("{http_base}/hook/claude-code/");
+    if body.contains(&lineage_route) {
+        DoctorRow {
+            check: "Claude Code hook block present",
+            status: DocStatus::Pass,
+            detail: format!("{} references {}", settings.display(), lineage_route),
+        }
+    } else {
+        DoctorRow {
+            check: "Claude Code hook block present",
+            status: DocStatus::Warn,
+            detail: format!(
+                "{} exists but doesn't POST to {}. Run `lineage init --force`.",
+                settings.display(),
+                lineage_route
+            ),
+        }
+    }
+}
+
+async fn check_function(
+    iii: &III,
+    label: &'static str,
+    function_id: &str,
+    payload: serde_json::Value,
+) -> DoctorRow {
+    let res = iii
+        .trigger(TriggerRequest {
+            function_id: function_id.to_string(),
+            payload,
+            action: None,
+            timeout_ms: Some(800),
+        })
+        .await;
+    match res {
+        Ok(_) => DoctorRow {
+            check: label,
+            status: DocStatus::Pass,
+            detail: function_id.to_string(),
+        },
+        Err(e) => DoctorRow {
+            check: label,
+            status: DocStatus::Fail,
+            detail: format!("{function_id}: {e}. Worker not connected? Tail data/logs/<worker>.log."),
+        },
+    }
+}
+
+fn print_doctor(rows: &[DoctorRow]) {
+    let max_check = rows.iter().map(|r| r.check.len()).max().unwrap_or(0);
+    println!(
+        "{:<width$}  STATUS  DETAILS",
+        "CHECK",
+        width = max_check.max(5)
+    );
+    println!(
+        "{:-<width$}  ------  -------",
+        "",
+        width = max_check.max(5)
+    );
+    for row in rows {
+        println!(
+            "{:<width$}  {:<6}  {}",
+            row.check,
+            row.status.label(),
+            row.detail,
+            width = max_check.max(5)
+        );
+    }
+    let pass = rows.iter().filter(|r| r.status == DocStatus::Pass).count();
+    let warn = rows.iter().filter(|r| r.status == DocStatus::Warn).count();
+    let fail = rows.iter().filter(|r| r.status == DocStatus::Fail).count();
+    println!();
+    println!("Summary: {pass} PASS, {warn} WARN, {fail} FAIL.");
 }

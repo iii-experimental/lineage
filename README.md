@@ -26,11 +26,11 @@ You've shipped code with Claude Code, Codex, Gemini CLI, OpenCode, Cursor, Copil
 
 ## Status
 
-**0.1.0**, greenfield. Targets `iii-engine` 0.11.6+. Local-only for v0; team aggregation via `iii-bridge` (already supported by the engine, no extra code).
+**0.1.0** shipped 2026-05-06. **0.2.0-dev** in progress. Targets `iii-engine` 0.11.6+. Local-only for v0; team aggregation via `iii-bridge` (already supported by the engine, no extra code).
 
-What works today: HTTP hook ingest, payload-shape-routed normalisers (Claude Code + a generic shape covering Codex / Gemini CLI / OpenCode / Cursor / Copilot CLI / Droid / any future runtime that emits `{event, session_id, ...}`), pure-`gix` shadow-ref snapshot capturing untracked files, rewind, list, blob resolve, commit-trailer attachment, CLI shim, `lineage_checkpoint` FIFO queue serialising concurrent snapshots per session, hook-fanout-based `detect` routing, `dev.sh`-supervised worker auto-restart. 32 unit tests; end-to-end smoke verified live; 12 ms mean / 13 ms p50 per hook.
+What works today: HTTP hook ingest, payload-shape-routed normalisers (Claude Code + a generic shape covering Codex / Gemini CLI / OpenCode / Cursor / Copilot CLI / Droid / any future runtime that emits `{event, session_id, ...}`), pure-`gix` shadow-ref snapshot capturing untracked files, rewind, list, blob resolve, commit-trailer attachment, CLI shim with `init` / `doctor` / `status` / `hook` / `checkpoint`, multi-tenant `repo_path` lift from hook payload `cwd`, `lineage_checkpoint` FIFO queue serialising concurrent snapshots per session, hook-fanout-based `detect` routing, `dev.sh`-supervised worker auto-restart. 37 unit tests; end-to-end smoke verified live; 12 ms mean / 13 ms p50 per hook.
 
-What's planned (see [TODOS](#todos)): `lineage init` (one-shot project setup), `lineage doctor` (preflight check + auto-repair), a real GIF, `lineage recap` (LLM session summaries), `lineage search` (BM25 over checkpoints), prebuilt release binaries.
+What's planned (see [TODOS](#todos)): a real GIF, `lineage recap` (LLM session summaries), `lineage search` (BM25 over checkpoints), prebuilt release binaries.
 
 ## 60-second install
 
@@ -153,7 +153,16 @@ cd /your/project
 lineage init
 ```
 
-That writes the Claude Code hook block to `.claude/settings.json` and verifies the engine is reachable. If you'd rather paste it manually, drop this in:
+That writes the Claude Code hook block to `.claude/settings.json` and verifies the engine is reachable. Sanity-check with:
+
+```bash
+lineage doctor                  # current directory
+lineage doctor --path /repo     # explicit
+```
+
+`doctor` runs 7 preflight checks (HTTP base, WS engine, git repo, hook block, three function registrations) and prints an aligned table. Returns non-zero if any FAIL, exits 0 on PASS or WARN.
+
+If you'd rather paste the hook block manually, drop this in:
 
 ```json
 {
@@ -316,7 +325,7 @@ lineage/
 ## Development
 
 ```bash
-cargo test --workspace          # 19 tests, includes gitops tempdir-git tests
+cargo test --workspace          # 37 tests, includes gitops tempdir-git tests
 cargo clippy --workspace --all-targets -- -D warnings
 cargo fmt --all --check
 cargo build --workspace --release
@@ -328,18 +337,21 @@ CI runs all four on every push and PR (see `.github/workflows/ci.yml`).
 
 Tracked in this repo for v0.2.0:
 
-- [ ] `lineage init <project-path>` — writes engine config, adds workers, writes `.claude/settings.json` hook block, prints the first-checkpoint walk-through.
-- [ ] `lineage doctor` — preflight: engine reachable, ports free, workers registered, repo is git, hook block present in settings.json. Auto-repair where possible.
 - [ ] Real demo GIF at `docs/demo.gif`. ~10s. The five frames described at the top of this file.
 - [ ] Prebuilt release binaries via GitHub Release (cuts the 50s `cargo build` from install).
 - [ ] `lineage recap` worker — composes session-tree entries + provider-router into markdown summaries.
 - [ ] `lineage search` worker — BM25 over checkpoint entries via stream subscription.
 - [ ] Native `iii-worker-manager` supervision once iii's worker registry supports local-dev binary registration (today only registry/OCI workers). Until then `dev.sh` does the supervising.
 - [ ] Promote `hook-claude-code` and `hook-runtime-events` to `iii-hq/workers` once dogfooded (smallest README-touch first per multi-PR merge order).
-- [ ] Multi-tenant `repo_path` from hook payload `cwd` so one engine can capture sessions for multiple repos concurrently.
 
-Done since v0.0.1:
+Done since v0.1.0:
 
+- [x] `lineage doctor` — 7-check preflight, aligned table, WARN for recoverable / FAIL for engine-down. Verified live: 7 PASS on initialized repo, 6 PASS / 1 WARN on `git init` without settings.json.
+- [x] Multi-tenant `repo_path` from hook payload `cwd`. One engine captures sessions for multiple repos concurrently. Both normalisers lift `cwd` (and `repo_path` for the generic shape).
+
+Done in v0.1.0:
+
+- [x] `lineage init <project-path>` — writes `.claude/settings.json` hook block + verifies engine reachability.
 - [x] Pure-`gix` shadow-snapshot path. No fork-execs. Captures untracked files. Honors `.gitignore`. 13 ms p50 (down from 91 ms).
 - [x] Collapsed 7 sibling normaliser crates into 1 generic + 1 Claude-Code-specific (~1,200 LOC delete).
 - [x] FIFO queue serialising concurrent snapshots per session.

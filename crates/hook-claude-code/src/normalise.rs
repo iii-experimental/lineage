@@ -31,6 +31,10 @@ pub fn normalise(raw: Value) -> anyhow::Result<Value> {
         .map(str::to_string);
     let tool_input = raw.get("tool_input").cloned();
     let tool_result = raw.get("tool_response").cloned();
+    let cwd = raw
+        .get("cwd")
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
 
     let event = match raw
         .get("hook_event_name")
@@ -62,6 +66,7 @@ pub fn normalise(raw: Value) -> anyhow::Result<Value> {
         "tool_name": tool_name,
         "tool_input": tool_input,
         "tool_result": tool_result,
+        "cwd": cwd,
         "raw": raw,
     }))
 }
@@ -120,5 +125,23 @@ mod tests {
         });
         let n = normalise(raw).unwrap();
         assert_eq!(n["event"], "pre_task");
+    }
+
+    #[test]
+    fn cwd_lifts_for_multi_tenant_capture() {
+        let raw = json!({
+            "session_id": "abc",
+            "hook_event_name": "Stop",
+            "cwd": "/home/dev/project-foo"
+        });
+        let n = normalise(raw).unwrap();
+        assert_eq!(n["cwd"], "/home/dev/project-foo");
+    }
+
+    #[test]
+    fn missing_cwd_is_null() {
+        let raw = json!({"session_id":"abc","hook_event_name":"Stop"});
+        let n = normalise(raw).unwrap();
+        assert!(n["cwd"].is_null());
     }
 }

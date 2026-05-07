@@ -41,6 +41,13 @@ pub struct NormalisedEvent {
     pub tool_name: Option<String>,
     pub tool_input: Option<serde_json::Value>,
     pub tool_result: Option<serde_json::Value>,
+    /// Working directory the runtime was launched from. Lifted from the
+    /// hook payload's `cwd` (Claude Code's `cwd` field, generic runtimes'
+    /// `cwd` or `repo_path`). Lets one engine capture sessions for
+    /// multiple repos concurrently — strategy uses this for the snapshot
+    /// path, falling back to `LINEAGE_REPO_PATH` only when payload has no
+    /// `cwd`.
+    pub cwd: Option<String>,
     pub raw: serde_json::Value,
 }
 

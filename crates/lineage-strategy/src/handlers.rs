@@ -245,7 +245,10 @@ pub async fn handle_hook(
         .unwrap_or_default();
 
     let shadow_ref = if event.snapshot_after() {
-        let p = ctx.repo_path();
+        // Multi-tenant: prefer the cwd carried in the hook payload (one engine
+        // can capture sessions for many repos concurrently). Fall back to the
+        // worker-startup `LINEAGE_REPO_PATH` only when payload has no cwd.
+        let p = evt.cwd.clone().unwrap_or_else(|| ctx.repo_path());
         match enqueue_snapshot(&ctx.iii, &p, &evt.session_id, Some(entry_id.clone())).await {
             Ok(receipt_id) => Some(format!("queued:{receipt_id}")),
             Err(e) => {

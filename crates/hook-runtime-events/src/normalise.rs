@@ -27,6 +27,11 @@ pub fn normalise(agent: &str, raw: Value) -> anyhow::Result<Value> {
         .get("output")
         .or_else(|| raw.get("tool_result"))
         .cloned();
+    let cwd = raw
+        .get("cwd")
+        .or_else(|| raw.get("repo_path"))
+        .and_then(|v| v.as_str())
+        .map(str::to_string);
 
     let event = match raw.get("event").and_then(|v| v.as_str()).unwrap_or("") {
         "session_start" | "session-start" => "session_start",
@@ -49,6 +54,7 @@ pub fn normalise(agent: &str, raw: Value) -> anyhow::Result<Value> {
         "tool_name": tool_name,
         "tool_input": tool_input,
         "tool_result": tool_result,
+        "cwd": cwd,
         "raw": raw,
     }))
 }
@@ -141,5 +147,26 @@ mod tests {
         let raw = json!({"session_id": "s", "event": "custom_event"});
         let n = normalise("copilot-cli", raw).unwrap();
         assert_eq!(n["event"], "custom_event");
+    }
+
+    #[test]
+    fn cwd_lifts_from_cwd_field() {
+        let raw = json!({"session_id":"s","event":"stop","cwd":"/home/dev/proj-a"});
+        let n = normalise("codex", raw).unwrap();
+        assert_eq!(n["cwd"], "/home/dev/proj-a");
+    }
+
+    #[test]
+    fn cwd_falls_back_to_repo_path() {
+        let raw = json!({"session_id":"s","event":"stop","repo_path":"/home/dev/proj-b"});
+        let n = normalise("droid", raw).unwrap();
+        assert_eq!(n["cwd"], "/home/dev/proj-b");
+    }
+
+    #[test]
+    fn cwd_null_when_neither_present() {
+        let raw = json!({"session_id":"s","event":"stop"});
+        let n = normalise("opencode", raw).unwrap();
+        assert!(n["cwd"].is_null());
     }
 }
