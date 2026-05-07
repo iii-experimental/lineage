@@ -68,9 +68,9 @@ You should see:
 }
 ```
 
-If the JSON prints, lineage is healthy.
+If the JSON prints, lineage is healthy. Open **`http://127.0.0.1:3213`** in a browser — that's the live iii-console; you'll watch sessions, queues, traces, and shadow refs land in real time as you drive Claude Code.
 
-> **iii-hq workers are optional.** Lineage runs standalone in v0.1. Once `session-tree`, `hook-fanout`, `dlp-scrubber`, `audit-log`, `context-compaction`, and `provider-router` publish to the iii worker registry, `iii worker add <name>` plugs them in for free. Until then lineage degrades gracefully: `entry_id` stays empty, shadow refs still land.
+> **iii-hq workers are optional.** Lineage runs standalone in v0.1+. Once `session-tree`, `hook-fanout`, `dlp-scrubber`, `audit-log`, `context-compaction`, and `provider-router` publish to the iii worker registry, `iii worker add <name>` plugs them in for free. Until then lineage degrades gracefully: `entry_id` stays empty, shadow refs still land.
 
 ## First checkpoint walk-through
 
@@ -179,6 +179,18 @@ If you'd rather paste the hook block manually, drop this in:
 Other runtimes follow the same pattern — agent name in the URL, event name as path. lineage detects the payload shape via `hook-fanout` and routes to the right normaliser: Claude Code uses `hook-claude-code` (its own vocabulary, e.g. `hook_event_name`, `tool_response`); Codex / Gemini CLI / OpenCode / Cursor / Copilot CLI / Droid all share the generic `{event, session_id, ...}` shape and route to `hook-runtime-events`. Adding a runtime that adopts the generic shape needs zero new code.
 
 After running `lineage init`, restart Claude Code (or your runtime) so it picks up the new settings.
+
+## Pause / resume capture
+
+Capture is **on by default** the moment `dev.sh` boots the strategy worker. `lineage disable` is the kill-switch:
+
+```bash
+lineage disable    # capture off; hooks return {blocked: true, message: "..."} and no shadow refs are written
+lineage enable     # capture back on; hooks land checkpoints again
+lineage status     # shows the current `enabled` flag
+```
+
+While disabled, agent runtimes still fire hooks (they don't know lineage is paused). The strategy worker acknowledges the hook with HTTP 200 + `blocked: true` so the runtime stays responsive, then writes nothing — no session-tree entry, no shadow ref, no `agent::*` topic publish. Re-enabling resumes capture mid-session; sessions and prior refs are untouched. *v0.2 caveat:* the flag is in-memory; an engine restart returns lineage to the default-enabled state. Persistence via iii-state is a v0.3 follow-up.
 
 ## Inspect what was captured
 

@@ -60,6 +60,11 @@ enum Cmd {
         /// Project root to check. Defaults to current directory.
         #[arg(long)]
         path: Option<PathBuf>,
+        /// After preflight, fire a synthetic Stop hook against a temp git repo
+        /// and assert a shadow ref lands. Confirms the hot path actually works,
+        /// not just that workers are connected.
+        #[arg(long)]
+        smoke: bool,
     },
     /// Mark this project as enabled for capture.
     Enable,
@@ -78,6 +83,7 @@ enum Cmd {
         cmd: CheckpointCmd,
     },
     /// Search captured checkpoints (BM25, planned in v0.2).
+    #[command(hide = true)]
     Search {
         /// Free-text query.
         query: String,
@@ -88,6 +94,7 @@ enum Cmd {
         cmd: AgentCmd,
     },
     /// Generate a markdown recap of recent agent work (planned in v0.2).
+    #[command(hide = true)]
     Recap {
         /// Time window, e.g. `1d`, `1w`. Optional.
         #[arg(long)]
@@ -139,6 +146,7 @@ enum CheckpointCmd {
         force: bool,
     },
     /// Print a markdown summary for one checkpoint (planned in v0.2).
+    #[command(hide = true)]
     Explain {
         /// Entry id.
         id: String,
@@ -168,8 +176,8 @@ async fn main() -> anyhow::Result<()> {
 
     match cli.cmd {
         Cmd::Init { path, force } => return cmd_init(path, force, &cli.http_base).await,
-        Cmd::Doctor { path } => {
-            return cmd_doctor(path, &cli.http_base, &cli.engine_url).await;
+        Cmd::Doctor { path, smoke } => {
+            return cmd_doctor(path, smoke, &cli.http_base, &cli.engine_url).await;
         }
         Cmd::Hook { agent, event } => return cmd_hook(&cli.http_base, &agent, &event).await,
         Cmd::Agent { cmd } => return cmd_agent(cmd).await,
@@ -200,7 +208,20 @@ async fn main() -> anyhow::Result<()> {
     match cli.cmd {
         Cmd::Enable => trigger(&iii, "lineage::enable", &serde_json::json!({})).await?,
         Cmd::Disable => trigger(&iii, "lineage::disable", &serde_json::json!({})).await?,
-        Cmd::Status => trigger(&iii, "lineage::status", &serde_json::json!({})).await?,
+        Cmd::Status => {
+            trigger(&iii, "lineage::status", &serde_json::json!({})).await?;
+            println!();
+            println!("Next:");
+            println!(
+                "  - Live activity:    open http://127.0.0.1:3213 (iii-console)"
+            );
+            println!(
+                "  - Smoke the loop:   ./examples/end-to-end-demo.sh    # capture + rewind a real file in /tmp"
+            );
+            println!(
+                "  - Wire your repo:   lineage init                    # writes .claude/settings.json"
+            );
+        }
         Cmd::Session { cmd } => match cmd {
             SessionCmd::List => trigger(&iii, "session::list", &serde_json::json!({})).await?,
             SessionCmd::Resume { id } => {
@@ -365,9 +386,13 @@ async fn cmd_agent(cmd: AgentCmd) -> anyhow::Result<()> {
                 .args(["worker", "add", &pkg])
                 .status()
                 .await
-                .map_err(|e| anyhow::anyhow!("iii worker add failed: {e}"))?;
+                .map_err(|e| anyhow::anyhow!(
+                    "iii worker add failed: {e}.\nNote: iii-hq workers are optional in v0.1+. lineage runs standalone with the bundled hook-claude-code and hook-runtime-events workers."
+                ))?;
             if !status.success() {
-                anyhow::bail!("iii worker add {pkg} exited {status}");
+                anyhow::bail!(
+                    "iii worker add {pkg} exited {status}.\nNote: iii-hq workers are optional in v0.1+. lineage runs standalone with the bundled hook-claude-code and hook-runtime-events workers."
+                );
             }
             Ok(())
         }
@@ -438,6 +463,7 @@ struct DoctorRow {
 
 async fn cmd_doctor(
     path: Option<PathBuf>,
+    smoke: bool,
     http_base: &str,
     engine_url: &str,
 ) -> anyhow::Result<()> {
@@ -498,6 +524,19 @@ async fn cmd_doctor(
         });
     }
 
+    if smoke {
+        let preflight_failed = rows.iter().any(|r| r.status == DocStatus::Fail);
+        if preflight_failed {
+            rows.push(DoctorRow {
+                check: "Smoke: synthetic hook → ref",
+                status: DocStatus::Fail,
+                detail: "skipped: preflight had failures".into(),
+            });
+        } else {
+            rows.push(check_smoke(http_base).await);
+        }
+    }
+
     print_doctor(&rows);
 
     let fails = rows.iter().filter(|r| r.status == DocStatus::Fail).count();
@@ -505,6 +544,138 @@ async fn cmd_doctor(
         std::process::exit(1);
     }
     Ok(())
+}
+
+async fn check_smoke(http_base: &str) -> DoctorRow {
+    use std::process::Command as StdCommand;
+
+    let tmp = match tempfile::tempdir() {
+        Ok(t) => t,
+        Err(e) => {
+            return DoctorRow {
+                check: "Smoke: synthetic hook → ref",
+                status: DocStatus::Fail,
+                detail: format!("create tempdir: {e}"),
+            };
+        }
+    };
+    let repo = tmp.path();
+
+    // Bootstrap a tiny git repo with one commit so shadow refs have a parent.
+    let setup: Vec<&[&str]> = vec![
+        &["init", "-q", "-b", "main"],
+        &["config", "user.email", "smoke@lineage"],
+        &["config", "user.name", "smoke"],
+        &["commit", "--allow-empty", "-qm", "init"],
+    ];
+    for args in setup {
+        let out = StdCommand::new("git").current_dir(repo).args(args).output();
+        match out {
+            Ok(o) if o.status.success() => {}
+            Ok(o) => {
+                return DoctorRow {
+                    check: "Smoke: synthetic hook → ref",
+                    status: DocStatus::Fail,
+                    detail: format!(
+                        "git {args:?} failed: {}",
+                        String::from_utf8_lossy(&o.stderr).trim()
+                    ),
+                };
+            }
+            Err(e) => {
+                return DoctorRow {
+                    check: "Smoke: synthetic hook → ref",
+                    status: DocStatus::Fail,
+                    detail: format!("git {args:?}: {e}"),
+                };
+            }
+        }
+    }
+    if let Err(e) = std::fs::write(repo.join("hello.txt"), "smoke") {
+        return DoctorRow {
+            check: "Smoke: synthetic hook → ref",
+            status: DocStatus::Fail,
+            detail: format!("write hello.txt: {e}"),
+        };
+    }
+
+    // Fire a Stop hook with cwd pointing at the tempdir so the multi-tenant
+    // path picks up the smoke repo regardless of LINEAGE_REPO_PATH.
+    let session = format!("smoke-{}", uuid::Uuid::new_v4().simple());
+    let payload = serde_json::json!({
+        "session_id": session,
+        "hook_event_name": "Stop",
+        "cwd": repo.display().to_string(),
+    });
+    let url = format!("{http_base}/hook/claude-code/stop");
+    let client = match reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+    {
+        Ok(c) => c,
+        Err(e) => {
+            return DoctorRow {
+                check: "Smoke: synthetic hook → ref",
+                status: DocStatus::Fail,
+                detail: format!("build http client: {e}"),
+            };
+        }
+    };
+    let post = client
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .body(payload.to_string())
+        .send()
+        .await;
+    match post {
+        Ok(r) if r.status().is_success() => {}
+        Ok(r) => {
+            return DoctorRow {
+                check: "Smoke: synthetic hook → ref",
+                status: DocStatus::Fail,
+                detail: format!("POST {url} → {}", r.status().as_u16()),
+            };
+        }
+        Err(e) => {
+            return DoctorRow {
+                check: "Smoke: synthetic hook → ref",
+                status: DocStatus::Fail,
+                detail: format!("POST {url}: {e}"),
+            };
+        }
+    }
+
+    // Poll up to 3s for a shadow ref under refs/iii/lineage/checkpoints/v0/<session>/.
+    let prefix = format!("refs/iii/lineage/checkpoints/v0/{session}/");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(3_000);
+    loop {
+        let out = StdCommand::new("git")
+            .current_dir(repo)
+            .args(["for-each-ref", "--format=%(refname)", &prefix])
+            .output();
+        if let Ok(o) = out
+            && o.status.success()
+        {
+            let s = String::from_utf8_lossy(&o.stdout);
+            if let Some(ref_name) = s.lines().next().filter(|l| !l.is_empty()) {
+                return DoctorRow {
+                    check: "Smoke: synthetic hook → ref",
+                    status: DocStatus::Pass,
+                    detail: format!("{ref_name} landed in {} ms", 3_000 - deadline.saturating_duration_since(std::time::Instant::now()).as_millis()),
+                };
+            }
+        }
+        if std::time::Instant::now() >= deadline {
+            return DoctorRow {
+                check: "Smoke: synthetic hook → ref",
+                status: DocStatus::Fail,
+                detail: format!(
+                    "no ref under {prefix} after 3s. Tail data/logs/lineage-gitops.log; check iii-queue depth at http://127.0.0.1:3213/queues."
+                ),
+            };
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    }
 }
 
 async fn check_http(http_base: &str) -> DoctorRow {

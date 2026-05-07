@@ -515,7 +515,12 @@ pub fn resolve_blob(input: ResolveBlobInput) -> Result<ResolveBlobOutput> {
                 let filename: &[u8] = e.filename.as_ref();
                 filename == needle
             })
-            .ok_or_else(|| anyhow!("path component {part} not found in tree"))?;
+            .ok_or_else(|| {
+                anyhow!(
+                    "path component {part} not found in tree {tree_id} (rooted at shadow ref {}).\nHint: list captured paths with `git ls-tree -r {tree_id}` or pick a known path from `git for-each-ref refs/iii/lineage/checkpoints/v0/`.",
+                    input.shadow_ref
+                )
+            })?;
         let oid = entry.oid.to_owned();
         let kind: EntryKind = entry.mode.kind();
         if i == parts.len() - 1 {

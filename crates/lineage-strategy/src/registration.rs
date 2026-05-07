@@ -1,4 +1,7 @@
-use crate::handlers::{StrategyContext, handle_hook, handle_resume, handle_rewind, handle_status};
+use crate::handlers::{
+    StrategyContext, handle_disable, handle_enable, handle_hook, handle_resume, handle_rewind,
+    handle_status,
+};
 use crate::{HookEvent, ResumeInput, RewindInput, StatusOutput};
 use iii_sdk::{III, RegisterFunction, RegisterTriggerInput};
 use serde_json::{Value, json};
@@ -28,6 +31,8 @@ pub fn register(iii: &III) {
     register_status(iii, ctx.clone());
     register_rewind(iii, ctx.clone());
     register_resume(iii, ctx.clone());
+    register_enable(iii, ctx.clone());
+    register_disable(iii, ctx.clone());
 }
 
 fn register_http_trigger(iii: &III, method: &str, api_path: &str) {
@@ -76,6 +81,32 @@ fn register_resume(iii: &III, ctx: Arc<StrategyContext>) {
                     .await
                     .map(|_| json!({"ok": true}))
                     .map_err(|e| e.to_string())
+            }
+        },
+    ));
+}
+
+fn register_enable(iii: &III, ctx: Arc<StrategyContext>) {
+    iii.register_function(RegisterFunction::new_async(
+        "lineage::enable",
+        move |_: Value| {
+            let ctx = ctx.clone();
+            async move {
+                let enabled = handle_enable(&ctx).await;
+                Ok::<Value, String>(json!({"enabled": enabled}))
+            }
+        },
+    ));
+}
+
+fn register_disable(iii: &III, ctx: Arc<StrategyContext>) {
+    iii.register_function(RegisterFunction::new_async(
+        "lineage::disable",
+        move |_: Value| {
+            let ctx = ctx.clone();
+            async move {
+                let enabled = handle_disable(&ctx).await;
+                Ok::<Value, String>(json!({"enabled": enabled}))
             }
         },
     ));

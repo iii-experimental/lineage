@@ -4,6 +4,7 @@ use parking_lot::Mutex;
 use serde_json::{Value, json};
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Strategy worker state.
 ///
@@ -16,6 +17,10 @@ pub struct StrategyContext {
     /// Sessions we have already issued `session::create` for. Skips the redundant
     /// extra round-trip on every subsequent hook for a known session.
     pub created_sessions: Mutex<HashSet<String>>,
+    /// Capture kill-switch. Defaults to true. `lineage disable` flips off,
+    /// `lineage enable` flips back on. In-memory only for v0.2; resets on
+    /// engine restart (a v0.3 follow-up will persist this in iii-state).
+    pub enabled: AtomicBool,
 }
 
 impl StrategyContext {
@@ -27,7 +32,16 @@ impl StrategyContext {
             ),
             current_session: Mutex::new(None),
             created_sessions: Mutex::new(HashSet::new()),
+            enabled: AtomicBool::new(true),
         }
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.enabled.load(Ordering::Relaxed)
+    }
+
+    pub fn set_enabled(&self, on: bool) {
+        self.enabled.store(on, Ordering::Relaxed);
     }
 
     pub fn repo_path(&self) -> String {
@@ -217,6 +231,23 @@ pub async fn handle_hook(
     event: HookEvent,
     raw: Value,
 ) -> anyhow::Result<HookResult> {
+    if !ctx.is_enabled() {
+        // Kill-switch: acknowledge the hook so the runtime stays responsive,
+        // but write nothing. session_id is best-effort — pulled from the raw
+        // payload if present, otherwise empty.
+        let session_id = raw
+            .get("session_id")
+            .and_then(|v| v.as_str())
+            .unwrap_or_default()
+            .to_string();
+        return Ok(HookResult {
+            session_id,
+            entry_id: String::new(),
+            shadow_ref: None,
+            blocked: true,
+            message: Some("lineage capture is disabled. Run `lineage enable` to resume.".into()),
+        });
+    }
     let mut evt = normalise(&ctx.iii, agent, raw).await?;
     evt.event = event;
     evt.agent = agent.to_string();
@@ -287,7 +318,7 @@ pub async fn handle_hook(
 
 pub async fn handle_status(ctx: &StrategyContext) -> StatusOutput {
     StatusOutput {
-        enabled: ctx.current_session().is_some() || std::env::var("LINEAGE_ENABLED").is_ok(),
+        enabled: ctx.is_enabled(),
         current_session_id: ctx.current_session(),
         repo_path: Some(ctx.repo_path()),
         engine_url: std::env::var("III_URL")
@@ -297,6 +328,16 @@ pub async fn handle_status(ctx: &StrategyContext) -> StatusOutput {
         console_hint: "open http://127.0.0.1:3213 for live worker / function / queue state"
             .to_string(),
     }
+}
+
+pub async fn handle_enable(ctx: &StrategyContext) -> bool {
+    ctx.set_enabled(true);
+    true
+}
+
+pub async fn handle_disable(ctx: &StrategyContext) -> bool {
+    ctx.set_enabled(false);
+    false
 }
 
 pub async fn handle_rewind(ctx: &StrategyContext, input: RewindInput) -> anyhow::Result<()> {
